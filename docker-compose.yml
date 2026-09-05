@@ -1,0 +1,26 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      - DEBUG=1
+      - DATABASE_URL=postgresql://myuser:mypassword@db:5432/mydb
+
+  db:
+    image: postgres:15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=study_db
+      - POSTGRES_USER=sumitkumar
+      - POSTGRES_PASSWORD=Ram@6399
+
+volumes:
+  postgres_data:
