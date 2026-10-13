@@ -1,6 +1,6 @@
 # 📚 StudyTask — Students Task Manager
 
-A full-stack web app that helps students manage their tasks and subtasks efficiently. Built with a Django REST API backend and a vanilla HTML/CSS/JS frontend.
+A full-stack web app that helps students manage their tasks and subtasks. Django REST API backend with a vanilla HTML/CSS/JS frontend, served by Django itself.
 
 ---
 
@@ -8,9 +8,12 @@ A full-stack web app that helps students manage their tasks and subtasks efficie
 
 | Part | Technology |
 |------|-----------|
-| Frontend | HTML, CSS, Vanilla JavaScript |
+| Frontend | HTML, CSS, Vanilla JavaScript (`templates/index.html`) |
 | Backend | Django + Django REST Framework |
+| Database | PostgreSQL |
 | Authentication | Token Authentication |
+| Server | Gunicorn + WhiteNoise |
+| Containers | Docker, Docker Compose |
 | Fonts | Google Fonts (Syne, DM Sans) |
 
 ---
@@ -31,72 +34,78 @@ A full-stack web app that helps students manage their tasks and subtasks efficie
 ## 📁 Project Structure
 
 ```
-project/
+student-task-portal/
 │
-├── backend/                  # Django project
-│   ├── api/
-│   │   ├── models.py         # Task, Subtask models
-│   │   ├── serializers.py    # DRF Serializers
-│   │   ├── views.py          # API Views
-│   │   └── urls.py           # API URL routes
+├── Task/                     # Django app
+│   ├── models.py             # Task, Subtask models
+│   ├── serializers.py        # DRF serializers
+│   ├── views.py              # Auth + Task/Subtask API views
+│   └── urls.py               # API routes (mounted at /api/)
+│
+├── study_task/               # Django project
 │   ├── settings.py
 │   └── urls.py
 │
-└── frontend/
-    └── index.html            # Complete frontend (single file)
+├── templates/
+│   └── index.html            # Complete frontend (single file, served at /)
+├── screenshots/
+├── Dockerfile / docker-compose.yml
+├── requirements.txt
+└── manage.py
 ```
 
 ---
 
-## ⚙️ Backend Setup
+## ⚙️ Environment Variables
 
-### 1. Create a Virtual Environment
+Create a `.env` file in the project root (it is not committed):
+
+```env
+SECRET_KEY=your-secret-key
+DEBUG=True
+DB_NAME=study_db
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
+DB_HOST=localhost        # use "db" when running with Docker Compose
+DB_PORT=5432
+```
+
+---
+
+## ▶️ Run Locally
 
 ```bash
 python -m venv venv
 source venv/bin/activate        # Linux/Mac
 venv\Scripts\activate           # Windows
-```
 
-### 2. Install Dependencies
-
-```bash
-pip install django djangorestframework
-```
-
-### 3. Add to `settings.py`
-
-```python
-INSTALLED_APPS = [
-    ...
-    'rest_framework',
-    'rest_framework.authtoken',
-    'api',
-]
-
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
-    ],
-}
-```
-
-### 4. Run Migrations
-
-```bash
-python manage.py makemigrations
+pip install -r requirements.txt
 python manage.py migrate
-```
-
-### 5. Start the Server
-
-```bash
 python manage.py runserver
 ```
+
+Open `http://127.0.0.1:8000/` — the frontend is served by Django, no separate build step.
+
+PostgreSQL must be running and match the `DB_*` values in `.env`.
+
+---
+
+## 🐳 Run with Docker
+
+```bash
+docker compose up --build
+docker compose exec web python manage.py migrate
+```
+
+- Set `DB_HOST=db` in `.env`, and make `DB_NAME`, `DB_USER`, `DB_PASSWORD` match the `POSTGRES_*` values in `docker-compose.yml`.
+- App runs at `http://localhost:8000/`.
+- Do not commit real passwords — keep them in `.env`.
 
 ---
 
 ## 🔗 API Endpoints
+
+Base path: `/api/`
 
 | Method | URL | Description |
 |--------|-----|-------------|
@@ -112,40 +121,33 @@ python manage.py runserver
 | PATCH | `/api/tasks/{id}/subtasks/{sid}/` | Update a subtask |
 | DELETE | `/api/tasks/{id}/subtasks/{sid}/` | Delete a subtask |
 
+Send the token as `Authorization: Token <token>` on every task/subtask request.
+
 ---
 
 ## 🚨 Important — CSRF Fix
 
-`LoginView` and `RegisterView` must have these two lines, otherwise you will get a **403 Forbidden** error on every login attempt:
+`LoginView` and `RegisterView` set these two lines, otherwise every login attempt returns **403 Forbidden**:
 
 ```python
-from rest_framework.permissions import AllowAny
-
 class LoginView(APIView):
     authentication_classes = []       # Removes CSRF enforcement
     permission_classes = [AllowAny]   # Allows public access
-
-class RegisterView(APIView):
-    authentication_classes = []       # Removes CSRF enforcement
-    permission_classes = [AllowAny]   # Allows public access
 ```
 
-**Why?** Django REST Framework's default `SessionAuthentication` enforces CSRF on every POST request. Since login and register endpoints are public and use Token auth, they don't need CSRF protection.
+**Why?** DRF's default `SessionAuthentication` enforces CSRF on POST requests. These endpoints are public and use Token auth, so they don't need it.
 
 ---
 
-## 🌐 Frontend Setup
+## 🌐 Frontend API URL
 
-Open `index.html` and update the API base URL to match your backend:
+`templates/index.html` has the API base URL hardcoded:
 
 ```javascript
-const API       = 'http://127.0.0.1:8000/api';
-const URL_LOGIN = `${API}/auth/login/`;
-const URL_REG   = `${API}/auth/register/`;
-const URL_TASKS = `${API}/tasks/`;
+const API = 'http://127.0.0.1:8000/api';
 ```
 
-Just open `index.html` in your browser — no build step required!
+Change it to your deployed URL when hosting the app.
 
 ---
 
@@ -155,24 +157,19 @@ Just open `index.html` in your browser — no build step required!
 |-------|-------|-----|
 | `403 Forbidden` on login | CSRF enforcement | Add `authentication_classes = []` to Login/Register views |
 | `401 Unauthorized` on tasks | Missing token | Log in first — token is saved automatically |
-| `404 Not Found` on favicon | No favicon file | Already handled with `<link rel="icon" href="data:,">` ✅ |
-| Tracking Prevention (Bootstrap) | Browser privacy feature | Harmless — the app uses custom CSS, not Bootstrap |
-| `ERR_NETWORK_CHANGED` (Fonts) | Network interruption | Reload the page |
+| `UndefinedValueError` on start | Missing `.env` value | Add the variable listed under Environment Variables |
+| DB connection refused | Wrong `DB_HOST` | `localhost` locally, `db` in Docker Compose |
 
 ---
 
 ## 👨‍💻 Developer Notes
 
-- Bootstrap CSS is linked in the HTML but not actually used — it can safely be removed
-- The auth token is stored in `localStorage` so users remain logged in after page reload
-- Pressing `Enter` on the login/register form submits it
-- Pressing `Enter` in the subtask input adds a chip
+- Bootstrap CSS is linked in the HTML but the app uses custom CSS — the link can be removed.
+- Pressing `Enter` on the login/register form submits it.
+- Pressing `Enter` in the subtask input adds a chip.
 
 ---
 
-## 📄 License
-
-MIT — Free to use and modify.
 ## 📸 Screenshots
 
 ### Register Page
@@ -180,7 +177,6 @@ MIT — Free to use and modify.
 
 ### Login Page
 ![Login](screenshots/Login.png)
-
 
 ### Dashboard
 ![Dashboard](screenshots/Dashboard.png)
